@@ -38,6 +38,53 @@ func (h *Handler) WebhookRoutes() func(r chi.Router) {
 	}
 }
 
+func (h *Handler) QuoteRoutes() func(r chi.Router) {
+	return func(r chi.Router) {
+		r.Post("/quote", h.handleQuote)
+	}
+}
+
+type quoteReq struct {
+	Side     string `json:"side" validate:"required,oneof=deposit withdraw"`
+	Amount   string `json:"amount" validate:"required"`
+	Currency string `json:"currency" validate:"required"`
+	Country  string `json:"country" validate:"required"`
+}
+
+func (h *Handler) handleQuote(w http.ResponseWriter, r *http.Request) {
+	var req quoteReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.BadRequest(w, "invalid request body")
+		return
+	}
+
+	if err := api.Validate(req); err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+
+	amount, err := decimal.NewFromString(req.Amount)
+	if err != nil || amount.LessThanOrEqual(decimal.Zero) {
+		api.BadRequest(w, "invalid amount")
+		return
+	}
+
+	qr := QuoteRequest{
+		Side:         req.Side,
+		FiatAmount:   amount,
+		FiatCurrency: req.Currency,
+		Country:      req.Country,
+	}
+
+	quote, err := h.svc.GetQuote(r.Context(), qr)
+	if err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+
+	api.JSON(w, http.StatusOK, quote)
+}
+
 type depositReq struct {
 	Amount   string `json:"amount" validate:"required"`
 	Currency string `json:"currency" validate:"required"`

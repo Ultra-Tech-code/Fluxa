@@ -40,8 +40,19 @@ func (p *Provider) SupportedCountries() []string {
 
 func (p *Provider) GetQuote(ctx context.Context, req fiat.QuoteRequest) (*fiat.FiatQuote, error) {
 	if p.secretKey == "mock" || p.secretKey == "" {
+		supported := false
+		for _, c := range p.SupportedCountries() {
+			if req.Country == c {
+				supported = true
+				break
+			}
+		}
+		if req.Country != "" && !supported {
+			return nil, fmt.Errorf("flutterwave: unsupported country %q", req.Country)
+		}
+
 		rate := decimal.NewFromInt(1500)
-		usdcAmt := req.FiatAmount.Div(rate)
+		usdcAmt := req.FiatAmount.DivRound(rate, 7) // Using 7 decimals for Stellar precision
 		return &fiat.FiatQuote{
 			Provider:     "flutterwave",
 			FiatAmount:   req.FiatAmount,
@@ -49,6 +60,8 @@ func (p *Provider) GetQuote(ctx context.Context, req fiat.QuoteRequest) (*fiat.F
 			USDCAmount:   usdcAmt,
 			Rate:         rate,
 			Fee:          decimal.NewFromInt(0),
+			MinLimit:     decimal.NewFromInt(100),
+			MaxLimit:     decimal.NewFromInt(10000000),
 			ExpiresAt:    time.Now().Add(30 * time.Second),
 		}, nil
 	}

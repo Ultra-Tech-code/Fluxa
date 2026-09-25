@@ -624,6 +624,42 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ── Fiat ──────────────────────────────────────────────────────────────────
+  /v1/fiat/quote:
+    post:
+      operationId: previewFiat
+      summary: "Preview a fiat deposit or withdrawal"
+      description: "Get a read-only quote before creating a fiat deposit or withdrawal."
+      tags: ["Wallets"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [side, amount, currency, country]
+              properties:
+                side:
+                  type: string
+                  enum: [deposit, withdraw]
+                amount:
+                  type: string
+                currency:
+                  type: string
+                country:
+                  type: string
+      responses:
+        "200":
+          description: "Preview quote"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FiatQuotePreviewResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   # ── FX ────────────────────────────────────────────────────────────────────
   /v1/fx/quote:
     post:
@@ -1987,6 +2023,29 @@ components:
           enum: ["submitted"]
 
     # ── Fiat ──────────────────────────────────────────────────────────────
+    FiatQuotePreviewResponse:
+      type: object
+      properties:
+        provider:
+          type: string
+        fiat_amount:
+          type: string
+        fiat_currency:
+          type: string
+        usdc_amount:
+          type: string
+        rate:
+          type: string
+        fee:
+          type: string
+        min_limit:
+          type: string
+        max_limit:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+
     FiatDepositRequest:
       type: object
       required: ["amount", "currency", "email", "name"]

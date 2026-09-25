@@ -10,6 +10,7 @@ import (
 
 type (
 	QuoteRequest struct {
+		Side         string // "deposit" or "withdraw"
 		FiatCurrency string
 		FiatAmount   decimal.Decimal
 		Country      string
@@ -22,6 +23,8 @@ type (
 		USDCAmount   decimal.Decimal
 		Rate         decimal.Decimal
 		Fee          decimal.Decimal
+		MinLimit     decimal.Decimal
+		MaxLimit     decimal.Decimal
 		ExpiresAt    time.Time
 	}
 

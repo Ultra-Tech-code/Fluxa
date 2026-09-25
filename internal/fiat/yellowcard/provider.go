@@ -58,6 +58,19 @@ func (p *Provider) SupportedCountries() []string {
 }
 
 func (p *Provider) GetQuote(ctx context.Context, req fiat.QuoteRequest) (*fiat.FiatQuote, error) {
+	if req.Country != "" {
+		supported := false
+		for _, c := range p.SupportedCountries() {
+			if req.Country == c {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			return nil, fmt.Errorf("yellowcard: unsupported country %q", req.Country)
+		}
+	}
+
 	var ycReq struct {
 		SourceCurrency      string `json:"source_currency"`
 		DestinationCurrency string `json:"destination_currency"`
@@ -66,10 +79,17 @@ func (p *Provider) GetQuote(ctx context.Context, req fiat.QuoteRequest) (*fiat.F
 		Country             string `json:"country,omitempty"`
 	}
 
-	ycReq.SourceCurrency = req.FiatCurrency
-	ycReq.DestinationCurrency = "USDC"
+	if req.Side == "withdraw" {
+		ycReq.SourceCurrency = "USDC"
+		ycReq.DestinationCurrency = req.FiatCurrency
+		ycReq.Side = "buy"
+	} else {
+		ycReq.SourceCurrency = req.FiatCurrency
+		ycReq.DestinationCurrency = "USDC"
+		ycReq.Side = "sell"
+	}
+
 	ycReq.Amount = req.FiatAmount.StringFixed(2)
-	ycReq.Side = "sell"
 	if req.Country != "" {
 		ycReq.Country = req.Country
 	}
@@ -97,6 +117,8 @@ func (p *Provider) GetQuote(ctx context.Context, req fiat.QuoteRequest) (*fiat.F
 			Side              string `json:"side"`
 			SourceCurrency    string `json:"source_currency"`
 			DestCurrency      string `json:"destination_currency"`
+			MinAmount         string `json:"min_amount"`
+			MaxAmount         string `json:"max_amount"`
 		} `json:"rate"`
 	}
 
@@ -108,6 +130,8 @@ func (p *Provider) GetQuote(ctx context.Context, req fiat.QuoteRequest) (*fiat.F
 	fee, _ := decimal.NewFromString(result.Rate.Fee)
 	srcAmt, _ := decimal.NewFromString(result.Rate.SourceAmount)
 	dstAmt, _ := decimal.NewFromString(result.Rate.DestinationAmount)
+	minLimit, _ := decimal.NewFromString(result.Rate.MinAmount)
+	maxLimit, _ := decimal.NewFromString(result.Rate.MaxAmount)
 
 	expiresAt := time.Now().Add(30 * time.Second)
 	if result.Rate.ExpiresAt != "" {
@@ -118,11 +142,13 @@ func (p *Provider) GetQuote(ctx context.Context, req fiat.QuoteRequest) (*fiat.F
 
 	return &fiat.FiatQuote{
 		Provider:     "yellowcard",
-		FiatAmount:   srcAmt,
+		FiatAmount:   req.FiatAmount,
 		FiatCurrency: req.FiatCurrency,
 		USDCAmount:   dstAmt,
 		Rate:         rate,
 		Fee:          fee,
+		MinLimit:     minLimit,
+		MaxLimit:     maxLimit,
 		ExpiresAt:    expiresAt,
 	}, nil
 }

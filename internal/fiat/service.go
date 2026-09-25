@@ -28,6 +28,7 @@ type Repository interface {
 }
 
 type Service interface {
+	GetQuote(ctx context.Context, req QuoteRequest) (*FiatQuote, error)
 	InitiateDeposit(ctx context.Context, req DepositRequest) (*DepositResponse, error)
 	InitiateWithdrawal(ctx context.Context, req WithdrawRequest) (*WithdrawResponse, error)
 	HandleWebhook(ctx context.Context, payload []byte, signature string) error
@@ -51,6 +52,10 @@ func NewService(repo Repository, rail Rail, fxSvc fx.Service, transferSvc transf
 		platformWalletID: platformWalletID,
 		providerName:     providerName,
 	}
+}
+
+func (s *service) GetQuote(ctx context.Context, req QuoteRequest) (*FiatQuote, error) {
+	return s.rail.GetQuote(ctx, req)
 }
 
 func (s *service) InitiateDeposit(ctx context.Context, req DepositRequest) (*DepositResponse, error) {

@@ -39,6 +39,7 @@ type (
 )
 
 type Rail interface {
+	GetQuote(ctx context.Context, req QuoteRequest) (*FiatQuote, error)
 	Deposit(ctx context.Context, req DepositRequest) (*DepositResponse, error)
 	Withdraw(ctx context.Context, req WithdrawRequest) (*WithdrawResponse, error)
 	HandleWebhook(ctx context.Context, payload []byte, signature string) (*RailEvent, error)
@@ -50,6 +51,10 @@ type RailAdapter struct {
 
 func NewRailAdapter(p Provider) *RailAdapter {
 	return &RailAdapter{provider: p}
+}
+
+func (a *RailAdapter) GetQuote(ctx context.Context, req QuoteRequest) (*FiatQuote, error) {
+	return a.provider.GetQuote(ctx, req)
 }
 
 func (a *RailAdapter) Deposit(ctx context.Context, req DepositRequest) (*DepositResponse, error) {
