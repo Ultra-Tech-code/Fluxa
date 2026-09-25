@@ -17,13 +17,19 @@ func NewConversionRepo(db DB) *ConversionRepo {
 }
 
 func (r *ConversionRepo) Create(ctx context.Context, c *domain.Conversion) error {
+	var minAmtOut *string
+	if c.MinAmountOut != nil {
+		s := c.MinAmountOut.String()
+		minAmtOut = &s
+	}
+
 	_, err := r.db.Exec(ctx,
-		`INSERT INTO conversions (id, wallet_id, source_asset, dest_asset, source_amount, dest_amount, fee_amount, fee_bps, rate, tx_hash, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		`INSERT INTO conversions (id, wallet_id, source_asset, dest_asset, source_amount, dest_amount, fee_amount, fee_bps, rate, tx_hash, min_amount_out, max_slippage_bps, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 		c.ID, c.WalletID, c.SourceAsset, c.DestAsset,
 		c.SourceAmount.String(), c.DestAmount.String(), c.FeeAmount.String(),
 		nullableFeeBps(c.FeeBps), c.Rate.String(),
-		nullableString(c.TxHash), c.CreatedAt,
+		nullableString(c.TxHash), minAmtOut, c.MaxSlippageBps, c.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("insert conversion: %w", err)
@@ -34,7 +40,7 @@ func (r *ConversionRepo) Create(ctx context.Context, c *domain.Conversion) error
 func (r *ConversionRepo) ListByWallet(ctx context.Context, walletID string, limit, offset int) ([]*domain.Conversion, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT id, wallet_id, source_asset, dest_asset, source_amount, dest_amount,
-		        COALESCE(fee_amount, '0'), fee_bps, rate, COALESCE(tx_hash,''), created_at
+		        COALESCE(fee_amount, '0'), fee_bps, rate, COALESCE(tx_hash,''), min_amount_out, max_slippage_bps, created_at
 		 FROM conversions
 		 WHERE wallet_id = $1
 		 ORDER BY created_at DESC
@@ -51,8 +57,9 @@ func (r *ConversionRepo) ListByWallet(ctx context.Context, walletID string, limi
 		c := &domain.Conversion{}
 		var src, dst, fee, rate string
 		var feeBps *int
+		var minAmtOut *string
 		if err := rows.Scan(&c.ID, &c.WalletID, &c.SourceAsset, &c.DestAsset,
-			&src, &dst, &fee, &feeBps, &rate, &c.TxHash, &c.CreatedAt); err != nil {
+			&src, &dst, &fee, &feeBps, &rate, &c.TxHash, &minAmtOut, &c.MaxSlippageBps, &c.CreatedAt); err != nil {
 			return nil, err
 		}
 		c.SourceAmount, _ = decimal.NewFromString(src)
@@ -62,6 +69,10 @@ func (r *ConversionRepo) ListByWallet(ctx context.Context, walletID string, limi
 			c.FeeBps = *feeBps
 		}
 		c.Rate, _ = decimal.NewFromString(rate)
+		if minAmtOut != nil {
+			val, _ := decimal.NewFromString(*minAmtOut)
+			c.MinAmountOut = &val
+		}
 		conversions = append(conversions, c)
 	}
 	return conversions, rows.Err()

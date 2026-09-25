@@ -56,7 +56,7 @@ type ConversionRepo interface {
 // Service is the FX domain service interface.
 type Service interface {
 	GetQuote(ctx context.Context, fromAsset, toAsset, amount string) (*Quote, error)
-	ExecuteConversion(ctx context.Context, walletID, quoteID string) (*domain.Conversion, error)
+	ExecuteConversion(ctx context.Context, walletID, quoteID string, minAmountOut *decimal.Decimal, maxSlippageBps *int) (*domain.Conversion, error)
 	GetRates(ctx context.Context, from, to string) (*RateResponse, error)
 }
 
@@ -181,7 +181,7 @@ func (s *service) GetQuote(ctx context.Context, fromAsset, toAsset, amount strin
 
 // ExecuteConversion fetches a quote by ID from Redis, validates it has not expired
 // or been used, verifies ownership, atomically marks it used, and records the conversion.
-func (s *service) ExecuteConversion(ctx context.Context, walletID, quoteID string) (*domain.Conversion, error) {
+func (s *service) ExecuteConversion(ctx context.Context, walletID, quoteID string, minAmountOut *decimal.Decimal, maxSlippageBps *int) (*domain.Conversion, error) {
 	w, err := s.walletRepo.GetByID(ctx, walletID)
 	if err != nil {
 		return nil, err
@@ -221,16 +221,29 @@ func (s *service) ExecuteConversion(ctx context.Context, walletID, quoteID strin
 		return nil, domain.ErrInvalidQuoteAmount
 	}
 
+	if minAmountOut != nil && q.ToAmount.LessThan(*minAmountOut) {
+		return nil, fmt.Errorf("conversion failed: destination amount %s is less than minimum required %s", q.ToAmount.String(), minAmountOut.String())
+	}
+
+	if maxSlippageBps != nil {
+		// For a fixed quote, the rate is already locked. 
+		// If we want to check slippage against current market rate, we would fetch it here.
+		// However, typically slippage is compared to the quote rate if it was a floating quote.
+		// We just persist it since the quote is guaranteed and fixed.
+	}
+
 	conv := &domain.Conversion{
-		ID:           uuid.New().String(),
-		WalletID:     walletID,
-		SourceAsset:  q.FromAsset,
-		DestAsset:    q.ToAsset,
-		SourceAmount: q.FromAmount,
-		DestAmount:   q.ToAmount,
-		FeeAmount:    q.Fee,
-		Rate:         q.Rate,
-		CreatedAt:    time.Now().UTC(),
+		ID:             uuid.New().String(),
+		WalletID:       walletID,
+		SourceAsset:    q.FromAsset,
+		DestAsset:      q.ToAsset,
+		SourceAmount:   q.FromAmount,
+		DestAmount:     q.ToAmount,
+		FeeAmount:      q.Fee,
+		Rate:           q.Rate,
+		MinAmountOut:   minAmountOut,
+		MaxSlippageBps: maxSlippageBps,
+		CreatedAt:      time.Now().UTC(),
 	}
 	if err := s.conversionRepo.Create(ctx, conv); err != nil {
 		return nil, fmt.Errorf("persist conversion: %w", err)

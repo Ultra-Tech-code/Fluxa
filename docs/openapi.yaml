@@ -2364,6 +2364,12 @@ components:
         quote_id:
           type: string
           format: uuid
+        min_amount_out:
+          type: string
+          description: "Optional minimum acceptable output amount"
+        max_slippage_bps:
+          type: integer
+          description: "Optional maximum acceptable slippage in basis points"
 
     ConversionResponse:
       type: object
