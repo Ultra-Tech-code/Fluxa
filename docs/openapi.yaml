@@ -1236,6 +1236,48 @@ paths:
           description: "Webhook validation failed"
 
   # ── Fees ──────────────────────────────────────────────────────────────────
+  /v1/fees/preview:
+    post:
+      operationId: previewFee
+      summary: "Preview fees"
+      description: "Preview the calculated fees for a transfer or conversion."
+      tags: ["Fees"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, asset, amount]
+              properties:
+                type:
+                  type: string
+                  enum: [transfer, conversion]
+                asset:
+                  type: string
+                amount:
+                  type: string
+      responses:
+        "200":
+          description: "Fee preview"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  gross_amount:
+                    type: string
+                  fee_amount:
+                    type: string
+                  net_amount:
+                    type: string
+                  fee_bps:
+                    type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /v1/fees:
     get:
       operationId: getFeeSchedule

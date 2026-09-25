@@ -1,12 +1,14 @@
 package fees
 
 import (
+	"encoding/json"
 	"net/http"
 	"time"
 
 	"github.com/fluxa/fluxa/internal/api"
 	"github.com/fluxa/fluxa/internal/tenant"
 	"github.com/go-chi/chi/v5"
+	"github.com/shopspring/decimal"
 )
 
 type Handler struct {
@@ -20,6 +22,7 @@ func NewHandler(svc Service) *Handler {
 func (h *Handler) Routes() func(r chi.Router) {
 	return func(r chi.Router) {
 		r.Get("/", h.getSchedule)
+		r.Post("/preview", h.previewFee)
 	}
 }
 
@@ -58,6 +61,60 @@ func (h *Handler) getSchedule(w http.ResponseWriter, r *http.Request) {
 
 	api.JSON(w, http.StatusOK, resp)
 }
+
+type previewReq struct {
+	Type   string `json:"type" validate:"required,oneof=transfer conversion"`
+	Asset  string `json:"asset" validate:"required"`
+	Amount string `json:"amount" validate:"required"`
+}
+
+type previewResp struct {
+	GrossAmount string `json:"gross_amount"`
+	FeeAmount   string `json:"fee_amount"`
+	NetAmount   string `json:"net_amount"`
+	FeeBps      int    `json:"fee_bps"`
+}
+
+func (h *Handler) previewFee(w http.ResponseWriter, r *http.Request) {
+	var req previewReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.BadRequest(w, "invalid request body")
+		return
+	}
+
+	if err := api.Validate(req); err != nil {
+		api.BadRequest(w, err.Error())
+		return
+	}
+
+	amount, err := decimal.NewFromString(req.Amount)
+	if err != nil || amount.LessThanOrEqual(decimal.Zero) {
+		api.BadRequest(w, "amount must be a positive number")
+		return
+	}
+
+	tenantID := tenant.IDFromContext(r.Context())
+	
+	var fee *TransferFee
+	if req.Type == "transfer" {
+		fee, err = h.svc.CalculateTransferFee(r.Context(), tenantID, req.Asset, amount)
+	} else {
+		fee, err = h.svc.CalculateConversionFee(r.Context(), tenantID, req.Asset, amount)
+	}
+
+	if err != nil {
+		api.HandleDomainError(w, err)
+		return
+	}
+
+	api.JSON(w, http.StatusOK, previewResp{
+		GrossAmount: amount.StringFixed(7),
+		FeeAmount:   fee.FeeAmount.StringFixed(7),
+		NetAmount:   fee.NetAmount.StringFixed(7),
+		FeeBps:      fee.FeeBps,
+	})
+}
+
 
 func (h *Handler) listCollected(w http.ResponseWriter, r *http.Request) {
 	var start, end *time.Time
