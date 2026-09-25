@@ -2,6 +2,7 @@ package settlement
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -118,11 +119,24 @@ func (e *Engine) SubmitTransfer(ctx context.Context, txID string) error {
 		})
 	}
 
+	var memo txnbuild.Memo
+	if tx.Reference != "" {
+		if len(tx.Reference) <= 28 {
+			memo = txnbuild.MemoText(tx.Reference)
+		} else {
+			h := sha256.Sum256([]byte(tx.Reference))
+			var memoHash txnbuild.MemoHash
+			copy(memoHash[:], h[:])
+			memo = memoHash
+		}
+	}
+
 	stellarTx, err := txnbuild.NewTransaction(txnbuild.TransactionParams{
 		SourceAccount:        &srcAccount,
 		IncrementSequenceNum: true,
 		Operations:           ops,
 		BaseFee:              txnbuild.MinBaseFee * int64(len(ops)),
+		Memo:                 memo,
 		Preconditions: txnbuild.Preconditions{
 			TimeBounds: txnbuild.NewTimeout(30),
 		},

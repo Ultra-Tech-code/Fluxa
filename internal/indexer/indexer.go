@@ -219,10 +219,21 @@ func (idx *Indexer) processPayment(ctx context.Context, w *domain.Wallet, op ope
 		return nil
 	}
 
+	var reference string
+	horizonTx, txErr := idx.stellar.TransactionDetail(hash)
+	if txErr == nil {
+		if horizonTx.MemoType == "text" {
+			reference = horizonTx.Memo
+		} else if horizonTx.MemoType == "hash" {
+			reference = horizonTx.Memo
+		}
+	}
+
 	tx, err := newInboundTransaction(w.ID, w.PublicKey, hash, asset, amount, w.TenantID)
 	if err != nil {
 		return fmt.Errorf("build inbound transaction %s: %w", hash, err)
 	}
+	tx.Reference = reference
 
 	if err := idx.txRepo.Create(ctx, tx); err != nil {
 		return fmt.Errorf("create transaction %s: %w", hash, err)
